@@ -3,7 +3,7 @@
 #include "skipList.h"
 
 int main(){
-    SkipList<string, int> skiplist(6, 2);
+    SkipList<string, int> skiplist(6, 0.5);
     skiplist.Insert("测试1", 1);
     skiplist.Insert("测试2", 2);
     skiplist.Insert("测试3", 3);

@@ -1,3 +1,9 @@
+/**
+ * TODO 1. 目前只有 Insert 和 Remove 加了锁，Find 没有加锁，读写冲突仍会存在，应该去加读写锁。
+ * TODO 2. 要支持自定义比较函数
+ * TODO 3. 序列化&反序列化，将跳表以二进制形式存储到内存中，前 8 字节存储节点数，后续均为节点二进制信息。
+*/
+
 #ifndef SKIPLIST_H
 #define SKIPLIST_H
 
@@ -5,6 +11,7 @@
 #include <cmath>
 #include <cstring>
 #include <mutex>
+#include <random>
 #include "node.h"
 
 using namespace std;
@@ -12,7 +19,7 @@ using namespace std;
 template<typename K, typename V>
 class SkipList{
 public:
-    SkipList(int maxL, int p);
+    SkipList(int maxL, double p);
     ~SkipList();
 
     /// @brief 查找跳表中是否存在 键K
@@ -68,29 +75,39 @@ private:
     /// @brief 当前跳表级别数
     int nowLevel;
 
-    /// @brief 2 ~ 5
-    // 2 : 50% 概率建立下一级索引
-    // 3 : 33% 概率建立下一级索引
-    // 4 : 25% 概率建立下一级索引
-    // 5 : 20% 概率建立下一级索引
-    int probability;
+    /// @brief 
+    double probability;
 
     /// @brief 跳表头
     Node<K, V> *header;
 
     /// @brief 跳表中节点数
     size_t nodeCount;
+
+    /// @brief 随机数引擎
+    default_random_engine randomEngine;
+    uniform_real_distribution<double> getRandomFloat;
 };
 
 template<typename K, typename V>
-SkipList<K, V>::SkipList(int maxL, int p): maxLevel(maxL), probability(p), nowLevel(0), nodeCount(0){
+SkipList<K, V>::SkipList(int maxL, double p): maxLevel(maxL), probability(p), nowLevel(0), nodeCount(0), getRandomFloat(uniform_real_distribution(0.0, 1.0)){
     K k;
     V v;
     header = new Node<K, V>(k, v, maxLevel);
 }
 
 template<typename K, typename V>
-SkipList<K, V>::~SkipList(){ delete header; }
+SkipList<K, V>::~SkipList(){
+    // 循环删除所有节点，防止内存泄漏
+    Node<K, V>* cur = header->forward[0];
+    Node<K, V>* tmp;
+    while(cur){
+        tmp = cur->forward[0];
+        delete cur;
+        cur = tmp;
+    }
+    delete header; 
+}
 
 template<typename K, typename V>
 Node<K, V>* SkipList<K, V>::Find(K key) const{
@@ -164,6 +181,8 @@ void SkipList<K, V>::Remove(K key){
         }
 
         while(nowLevel > 0 && header->forward[nowLevel] == nullptr) --nowLevel;
+        // 要注意 delete 防止内存泄露
+        delete current;
         --nodeCount;
     }
 }
@@ -175,15 +194,15 @@ Node<K, V>* SkipList<K, V>::createNode(int level, K k, V v){
 
 template<typename K, typename V>
 int SkipList<K, V>::getRandomLevel(){
-    int res = 1;
-    // 1 / p 的概率构建二级索引 (1 / p)^2 构建三级....
-    while (rand() % probability) res++; 
+    int res = 0;
+    // p^(i - 1) 的概率构建第i级索引
+    while(getRandomFloat(randomEngine) < probability) res++;
     return (res < maxLevel) ? res : maxLevel;
 }
 
 template<typename K, typename V>
 void SkipList<K, V>::DisplayList(){
-    cout << "====================display list BEGIN====================" << endl;
+    cout << "====================display list BEGIN====================" << endl << endl;
     for(int i = nowLevel; i >= 0; --i){
         Node<K, V>* ptr = header->forward[i];
         cout << "Level: " << i << endl;
@@ -193,7 +212,7 @@ void SkipList<K, V>::DisplayList(){
         }
         cout << endl;
     }
-    cout << "=====================display list END=====================" << endl;
+    cout << "=====================display list END=====================" << endl << endl;
 }
 
 #endif  // SKIPLIST_H
