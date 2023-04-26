@@ -175,8 +175,7 @@ void SkipList<K, V>::Remove(K key){
 
     current = current->forward[0];
     if(current && current->Key() == key){
-        for(int i = 0; i <= nowLevel; ++i){
-            if(update[i]->forward[i] != current) break;
+        for(int i = current->level; i >= 0; --i){
             update[i]->forward[i] = current->forward[i];
         }
 
