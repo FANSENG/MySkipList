@@ -90,7 +90,7 @@ private:
 };
 
 template<typename K, typename V>
-SkipList<K, V>::SkipList(int maxL, double p): maxLevel(maxL), probability(p), nowLevel(0), nodeCount(0), getRandomFloat(uniform_real_distribution(0.0, 1.0)){
+SkipList<K, V>::SkipList(int maxL, double p): maxLevel(maxL), probability(p), nowLevel(0), nodeCount(0), getRandomFloat(uniform_real_distribution<double>(0.0, 1.0)){
     K k;
     V v;
     header = new Node<K, V>(k, v, maxLevel);
