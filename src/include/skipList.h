@@ -1,17 +1,16 @@
 /**
- * TODO 1. 目前只有 Insert 和 Remove 加了锁，Find 没有加锁，读写冲突仍会存在，应该去加读写锁。
- * TODO 2. 要支持自定义比较函数
- * TODO 3. 序列化&反序列化，将跳表以二进制形式存储到内存中，前 8 字节存储节点数，后续均为节点二进制信息。
+ * DONE 1. 目前只有 Insert 和 Remove 加了锁，Find 没有加锁，读写冲突仍会存在，应该去加读写锁。
+ * DONE 2. 要支持自定义比较函数
+ * TODO 3. 序列化&反序列化，将跳表以二进制形式存储到内存中，前 sizeof(size_t) 字节存储节点数，后续均为节点二进制信息，需传入单个节点所占用字节数，只需要存储节点中的 key & value。
 */
 
 #ifndef SKIPLIST_H
 #define SKIPLIST_H
 
-#include <cstdlib>
-#include <cmath>
 #include <cstring>
-#include <mutex>
+#include <shared_mutex>
 #include <random>
+#include <functional>  
 #include "node.h"
 
 using namespace std;
@@ -19,13 +18,13 @@ using namespace std;
 template<typename K, typename V>
 class SkipList{
 public:
-    SkipList(int maxL, double p);
+    SkipList(int maxL, double p, function<bool(K&&, K&&)> compare);
     ~SkipList();
 
     /// @brief 查找跳表中是否存在 键K
     /// @param 待查找的键
     /// @return 若存在，返回对应节点，不存在则返回空指针
-    Node<K, V>* Find(K) const;
+    Node<K, V>* Find(K);
 
     /// @brief 插入节点
     /// @param 待插入节点的键
@@ -67,7 +66,7 @@ private:
 
 private:
     /// @brief 多线程情况下保证读写安全
-    mutex mtx;
+    shared_mutex mtx;
 
     /// @brief 跳表最多级别数
     int maxLevel;
@@ -75,7 +74,7 @@ private:
     /// @brief 当前跳表级别数
     int nowLevel;
 
-    /// @brief 
+    /// @brief 跳表节点升级概率
     double probability;
 
     /// @brief 跳表头
@@ -87,10 +86,15 @@ private:
     /// @brief 随机数引擎
     default_random_engine randomEngine;
     uniform_real_distribution<double> getRandomFloat;
+
+    /// @brief 自定义比较函数
+    function<bool(K&&, K&&)> cmp;
 };
 
 template<typename K, typename V>
-SkipList<K, V>::SkipList(int maxL, double p): maxLevel(maxL), probability(p), nowLevel(0), nodeCount(0), getRandomFloat(uniform_real_distribution<double>(0.0, 1.0)){
+SkipList<K, V>::SkipList(int maxL, double p, function<bool(K&&, K&&)> compare): 
+    maxLevel(maxL), probability(p), cmp(compare), nowLevel(0), nodeCount(0),
+    getRandomFloat(uniform_real_distribution<double>(0.0, 1.0)){
     K k;
     V v;
     header = new Node<K, V>(k, v, maxLevel);
@@ -110,11 +114,14 @@ SkipList<K, V>::~SkipList(){
 }
 
 template<typename K, typename V>
-Node<K, V>* SkipList<K, V>::Find(K key) const{
+Node<K, V>* SkipList<K, V>::Find(K key){
+    shared_lock<shared_mutex> locker(mtx);
+
     Node<K, V>* current = header;
 
     for(int i = nowLevel; i >= 0; --i){
-        while(current->forward[i] && current->forward[i]->Key() < key) current = current->forward[i];
+        // while(current->forward[i] && current->forward[i]->Key() < key) current = current->forward[i];
+        while(current->forward[i] && cmp(current->forward[i]->Key(), move(key))) current = current->forward[i];
     }
     current = current->forward[0];
     if(current && current->Key() == key) return current;
@@ -124,7 +131,7 @@ Node<K, V>* SkipList<K, V>::Find(K key) const{
 
 template<typename K, typename V>
 bool SkipList<K, V>::Insert(K key, V value){
-    lock_guard<mutex> logker(mtx);
+    unique_lock<shared_mutex> locker(mtx);
 
     Node<K, V>* current = header;
 
@@ -133,7 +140,8 @@ bool SkipList<K, V>::Insert(K key, V value){
 
     // 记录插入节点在第i层插入位置的上一个节点
     for(int i = nowLevel; i >= 0; --i){
-        while(current->forward[i] && current->forward[i]->Key() < key) current = current->forward[i];
+        // while(current->forward[i] && current->forward[i]->Key() < key) current = current->forward[i];
+        while(current->forward[i] && cmp(current->forward[i]->Key(), move(key))) current = current->forward[i];
         update[i] = current;
     }
 
@@ -163,13 +171,15 @@ bool SkipList<K, V>::Insert(K key, V value){
 
 template<typename K, typename V>
 void SkipList<K, V>::Remove(K key){
-    lock_guard<mutex> locker(mtx);
+    unique_lock<shared_mutex> locker(mtx);
+
     Node<K, V>* current = header;
     Node<K, V>* update[maxLevel + 1];
     memset(update, 0, sizeof(void*) * (maxLevel + 1));
 
     for(int i = nowLevel; i >= 0; --i){
-        while(current->forward[i] && current->forward[i]->Key() < key) current = current->forward[i];
+        // while(current->forward[i] && current->forward[i]->Key() < key) current = current->forward[i];
+        while(current->forward[i] && cmp(current->forward[i]->Key(), key)) current = current->forward[i];
         update[i] = current;
     }
 
@@ -206,7 +216,7 @@ void SkipList<K, V>::DisplayList(){
         Node<K, V>* ptr = header->forward[i];
         cout << "Level: " << i << endl;
         while(ptr){
-            cout << ptr->Key() << " : " << ptr->Value() << ";";
+            cout << ptr->Key() << ":" << ptr->Value() << ";  ";
             ptr = ptr->forward[i];
         }
         cout << endl;

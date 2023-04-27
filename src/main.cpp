@@ -2,27 +2,30 @@
 #include "node.h"
 #include "skipList.h"
 
-int main(){
-    SkipList<string, int> skiplist(6, 0.5);
-    skiplist.Insert("测试1", 1);
-    skiplist.Insert("测试2", 2);
-    skiplist.Insert("测试3", 3);
-    skiplist.Insert("测试4", 4);
-    skiplist.Insert("测试5", 5);
-    skiplist.Insert("测试6", 6);
-    skiplist.Insert("测试7", 7);
-    skiplist.Insert("测试8", 8);
-    skiplist.Insert("测试9", 9);
-    skiplist.Insert("测试10", 1213);
-    Node<string, int>* tmp = skiplist.Find("测试7");
-    if(tmp != nullptr)
-        cout << "Find: [" << tmp->Key() << ", " << to_string(tmp->Value()) << "]" << endl;
+bool cmp(int &&a, int &&b){
+    return a < b;
+}
 
-    tmp = skiplist.Find("测试");
+int main(){
+    SkipList<int, string> skiplist(6, 0.5, cmp);
+    skiplist.Insert(1, "测试1");
+    skiplist.Insert(2, "测试2");
+    skiplist.Insert(3, "测试3");
+    skiplist.Insert(4, "测试4");
+    skiplist.Insert(5, "测试5");
+    skiplist.Insert(6, "测试6");
+    skiplist.Insert(7, "测试7");
+    skiplist.Insert(8, "测试8");
+    skiplist.Insert(9, "测试9");
+    skiplist.Insert(12345, "测试10");
+    Node<int, string>* tmp = skiplist.Find(7);
     if(tmp != nullptr)
-        cout << "Find: [" << tmp->Key() << ", " << to_string(tmp->Value()) << "]" << endl;
+        cout << "Find: [" << to_string(tmp->Key()) << ", " << tmp->Value() << "]" << endl;
+
+    tmp = skiplist.Find(124);
+    if(tmp != nullptr)
+        cout << "Find: [" << to_string(tmp->Key()) << ", " << tmp->Value() << "]" << endl;
 
     skiplist.DisplayList();
-
     return 0;
 }
