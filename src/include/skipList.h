@@ -1,7 +1,8 @@
 /**
  * DONE 1. 目前只有 Insert 和 Remove 加了锁，Find 没有加锁，读写冲突仍会存在，应该去加读写锁。
  * DONE 2. 要支持自定义比较函数
- * TODO 3. 序列化&反序列化，将跳表以二进制形式存储到内存中，前 sizeof(size_t) 字节存储节点数，后续均为节点二进制信息，需传入单个节点所占用字节数，只需要存储节点中的 key & value。
+ * Done 3. 序列化&反序列化，将跳表以二进制形式存储到内存中，只需要存储节点中的 key & value。
+ * !Q   存储和加载的数据中不能包含指针，必须为定长值，string也不能包含(底层为 char* 实现)。
 */
 
 #ifndef SKIPLIST_H
@@ -10,7 +11,9 @@
 #include <cstring>
 #include <shared_mutex>
 #include <random>
-#include <functional>  
+#include <functional>
+#include <iostream>
+#include <fstream>
 #include "node.h"
 
 using namespace std;
@@ -51,6 +54,18 @@ public:
     int GetLevel(){
         return nowLevel;
     }
+
+    /// @brief 清空跳表
+    void Clear();
+
+    /// @brief 将当前跳表的内容存储到文件中
+    /// @param path 存储文件路径
+    void Save(const string &path);
+
+    /// @brief 将文件中的内容加载到跳表中
+    /// @param path 存储文件路径
+    /// @return 加载数据个数
+    int Load(const string &path);
 
 private:
     /// @brief 创建新节点
@@ -103,12 +118,16 @@ SkipList<K, V>::SkipList(int maxL, double p, function<bool(K&&, K&&)> compare):
 template<typename K, typename V>
 SkipList<K, V>::~SkipList(){
     // 循环删除所有节点，防止内存泄漏
+    // ?只删除了第0层的，其他层的指针仍然没有删除，存在野指针的问题
+    // TODO 从高向低删除，先把上方的指针都清除了，最后删除下面的节点
+    // TODO header 的 forward数组也要都置为Nullptr
+    
     Node<K, V>* cur = header->forward[0];
     Node<K, V>* tmp;
     while(cur){
         tmp = cur->forward[0];
         delete cur;
-        cur = tmp;
+        cur = tmp;  
     }
     delete header; 
 }
@@ -222,6 +241,46 @@ void SkipList<K, V>::DisplayList(){
         cout << endl;
     }
     cout << "=====================display list END=====================" << endl << endl;
+}
+
+template<typename K, typename V>
+void SkipList<K, V>::Clear(){
+    // 循环删除所有节点，防止内存泄漏
+    Node<K, V>* cur = header->forward[0];
+    Node<K, V>* tmp;
+    while(cur){
+        tmp = cur->forward[0];
+        delete cur;
+        cur = tmp;  
+    }
+}
+
+template<typename K, typename V>
+void SkipList<K, V>::Save(const string &path){
+    ofstream outFile(path, ios::out|ios::binary);
+
+    Node<K, V>* cur = header->forward[0];
+    while(cur){
+        outFile.write(reinterpret_cast<char*>(&cur->data), sizeof(cur->data));
+        cur = cur->forward[0];
+    }
+    outFile.close();
+}
+
+template<typename K, typename V>
+int SkipList<K, V>::Load(const string &path){
+    nodeData<K, V> *tmp = new nodeData<K, V>();
+    this->Clear();
+    ifstream inFile(path, ios::in|ios::binary);
+    if(!inFile) {
+        cout << "Load File Open Error" <<endl;
+        return 0;
+    }
+    while(inFile.read(reinterpret_cast<char*>(tmp), sizeof(*tmp))){
+        this->Insert(tmp->key, tmp->value);
+    }
+    inFile.close();
+    return this->nodeCount;
 }
 
 #endif  // SKIPLIST_H
