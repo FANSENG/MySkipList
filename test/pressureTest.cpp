@@ -1,3 +1,8 @@
+/**
+ * TODO 1. 压力测试只单独测试了 Insert 和 Find，没有测试一个进程进行 Insert，一个进程 Find。
+ * TODO 2. 进行详细的压力测试，整理出一个性能表。
+*/
+
 #include <iostream>
 #include <chrono>
 #include <cstdlib>
@@ -11,8 +16,12 @@
 // 测试数据量
 #define TEST_COUNT 1000000
 
+bool cmp(int &&a, int &&b){
+    return a < b;
+}
+
 // 跳表
-SkipList<int, string> skipList(18, 0.5);
+SkipList<int, string> skipList(18, 0.5, cmp);
 
 void *insertElement(void* threadid) {
     long tid; 
